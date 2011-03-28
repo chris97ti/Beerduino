@@ -1,16 +1,16 @@
 /*
 Very early rough draft sketch for Beerduino
-
-Goal of this project is to regulate temperature in a
-refridgerator by controlling the compressor and a 
-separate heating element according to readings from
-temperature sensors. Unit will take commands over serial
-from a computer and will answer queries. The ultimate
-intent is to log this information onto a Rails site and
-make system fully available remotely via the web.
-
-Malcolm Morris-Pence 2011
-*/
+ 
+ Goal of this project is to regulate temperature in a
+ refridgerator by controlling the compressor and a 
+ separate heating element according to readings from
+ temperature sensors. Unit will take commands over serial
+ from a computer and will answer queries. The ultimate
+ intent is to log this information onto a Rails site and
+ make system fully available remotely via the web.
+ 
+ Malcolm Morris-Pence 2011
+ */
 
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -27,6 +27,7 @@ float currentDigitalTemp2 = 0.0;
 unsigned long timeNow;
 unsigned long lastTempCheck;
 unsigned long lastLEDCheck;
+unsigned long lastTempRotation;
 
 boolean compressorState = false;
 boolean heaterState = false;
@@ -45,37 +46,39 @@ LiquidCrystal lcd(13, 12, 5, 4, 3, 2);
 
 // Make the degree character
 byte degreeChar[8] = {
-	B01100,
-	B10010,
-	B10010,
-	B01100,
-	B00000,
-	B00000,
-	B00000,
-	B00000
+  B01100,
+  B10010,
+  B10010,
+  B01100,
+  B00000,
+  B00000,
+  B00000,
+  B00000
 };
 
 // Digital temperature sensor setup
 #define ONE_WIRE_BUS 6
 OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature sensors(&oneWire);
-DeviceAddress digitalThermometer1 = { 0x28, 0xDD, 0xAD, 0xE3, 0x02, 0x00, 0x00, 0xC1 };
-DeviceAddress digitalThermometer2 = { 0x28, 0xC4, 0xA2, 0xE3, 0x02, 0x00, 0x00, 0x63 };
+DeviceAddress digitalThermometer1 = { 
+  0x28, 0xDD, 0xAD, 0xE3, 0x02, 0x00, 0x00, 0xC1 };
+DeviceAddress digitalThermometer2 = { 
+  0x28, 0xC4, 0xA2, 0xE3, 0x02, 0x00, 0x00, 0x63 };
 
 void setup(void) {
   Serial.begin(9600);
-  
+
   // LED pins
   pinMode(greenLED1, OUTPUT);
   pinMode(greenLED2, OUTPUT);
   pinMode(redLED1, OUTPUT);
   pinMode(redLED2, OUTPUT);
-  
+
   // Initialize digital sensors
   sensors.begin();
   sensors.setResolution(digitalThermometer1, 10);
   sensors.setResolution(digitalThermometer2, 10);
-  
+
   // LCD Screen
   lcd.createChar(0, degreeChar); // create degree character
   // pinMode(backLight, OUTPUT);
@@ -93,75 +96,90 @@ void setup(void) {
   lcd.setCursor(2,3);         // set cursor to column 0, row 3
   lcd.print("Status goes here");
 }
-    
+
 void checkTemp() {
   timeNow = millis();
   if (timeNow >= lastTempCheck + readInterval) {
-   currentAnalogTemp = analogTemp();
-   printAnalogTemp();
-   
-   sensors.requestTemperatures();
-   currentDigitalTemp1 = digitalTemp(digitalThermometer1);
-   currentDigitalTemp2 = digitalTemp(digitalThermometer2);
-   
-   transmitDigitalTemp(1);
-   transmitDigitalTemp(2);
-   Serial.print("---\n");
-   
-   // Update clock
-   lastTempCheck = timeNow;
+    currentAnalogTemp = analogTemp();
+    printAnalogTemp();
+
+    sensors.requestTemperatures();
+    currentDigitalTemp1 = digitalTemp(digitalThermometer1);
+    currentDigitalTemp2 = digitalTemp(digitalThermometer2);
+
+    transmitDigitalTemp(1);
+    transmitDigitalTemp(2);
+    Serial.print("---\n");
+
+    // Update clock
+    lastTempCheck = timeNow;
+  }
+}
+
+void rotateTemps(int time) {
+  timeNow = millis();
+  if (timeNow >= lastTempRotation + time * 1000) {
+    Serial.println("time is");
+    lastTempRotation = timeNow;
   }
 }
 
 void checkLEDs() {
- timeNow = millis();
- if (timeNow >= lastLEDCheck + readInterval + 20) { // 20ms offset from checkTemp
-  
-  if (currentAnalogTemp >= 
+  timeNow = millis();
+  if (timeNow >= lastLEDCheck + readInterval + 20) { // 20ms offset from checkTemp
+    allOff();
+
+    if (currentAnalogTemp <= targetTemp + 1 && currentAnalogTemp <= targetTemp) {
+      compressorState = 0;
+      heaterState = 0;
+      clearLCDRow(3);
+      lcd.setCursor(0,3);
+      lcd.print("Temp is kosher!");
+    }
+
     // Light up greens if hot
-  if (currentAnalogTemp > targetTemp + 1) {
-    if (compressorState == 0) {
-      clearLCDRow(3);
-      lcd.setCursor(0,3);
-      lcd.print("Compressor is on");
-      // Actually turn on compressor here
-      compressorState = 1;
+    if (currentAnalogTemp > targetTemp + 1) {
+      if (compressorState == 0) {
+        clearLCDRow(3);
+        lcd.setCursor(0,3);
+        lcd.print("Compressor is on");
+        // Actually turn on compressor here
+        compressorState = 1;
+        heaterState = 0; // Just in case
+      }
+      digitalWrite(greenLED1, HIGH);
+      if (currentAnalogTemp > targetTemp + 3) {
+        digitalWrite(greenLED2, HIGH);
+      }
     }
-    digitalWrite(greenLED1, HIGH);
-    if (currentAnalogTemp > targetTemp + 3) {
-      digitalWrite(greenLED2, HIGH);
+
+    // Light up reds if cold
+    if (currentAnalogTemp < targetTemp) {
+      if (heaterState == 0) {
+        clearLCDRow(3);
+        lcd.setCursor(0,3);
+        lcd.print("Heater is on");
+        // Actually turn on heater here
+        heaterState = 1;
+        compressorState = 0; // Just in case
+      }
+      digitalWrite(redLED1, HIGH);
+      if (currentAnalogTemp < targetTemp - 2) {
+        digitalWrite(redLED2, HIGH);
+      }
     }
-  }
-  
-  // Light up reds if cold
-  if (currentAnalogTemp < targetTemp) {
-    if (heaterState == 0) {
-      clearLCDRow(3);
-      lcd.setCursor(0,3);
-      lcd.print("Heater is on");
-      // Actually turn on heater here
-      heaterState = 1;
-    }
-    digitalWrite(redLED1, HIGH);
-    if (currentAnalogTemp < targetTemp - 2) {
-      digitalWrite(redLED2, HIGH);
-    }
-  }
-  
-  lastLEDCheck = timeNow;
- } 
+
+    lastLEDCheck = timeNow;
+  } 
 }
 
 // Main loop function
 void loop(void) {
-  allOff();
-  
   checkTemp();
-  
-  checkLEDs();
-  
 
-  
-  // delay(3000);
+  checkLEDs();
+
+  rotateTemps(5);
 }
+
 
