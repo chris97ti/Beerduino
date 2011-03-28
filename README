@@ -1,0 +1,40 @@
+Beerduino by Malcolm Morris-Pence, 2011
+
+The goal of this project is to regulate the temperature of a homebrew 
+fermentation chamber with an Arduino board. While there are plenty of 
+off-the-shelf products that can do this perfectly well, I am mostly 
+interested in the chance to learn to use some technolgies that have 
+been of interest to me in a way that's useful to me. Eventually I plan 
+to have a Rails application that can present everything done here on a 
+nice site that I can use to remotely monitor and adjust conditions.
+
+The Arduino will read the sensor data of thermistors either near or in 
+the beer and turn power on/off to a cooler or heater according to 
+deviance from a target temperature.  The serial port will be used to 
+log sensor and state data to an external application if present and to 
+take commands from said application. Basic real-time data is printed 
+to a 20x4 LCD screen.
+
+At the time of this writing, the hardware configuration is as follows:
+
+2 green, 2 red LEDs (pins 7-10) to indicate temperature variance 
+(These are an artifact of initial tinkering. They will be removed as 
+this nears completion.)
+1 analog thermistor (on A0)
+
+2 digital one-wire temperature sensors DS18B20 (pin 6)
+
+1 20x4 LCD screen:
+	Pin 2 – LCD pin 14
+	Pin 3 – LCD pin 13
+	Pin 4 – LCD pin 12
+	Pin 5 – LCD pin 11
+	Pin 12 – LCD pin 6 (EN)
+	Pin 13 – LCD pin 4 (RS)
+	
+Planned: Remove at least 2 LEDs for power controls (Mosfet to 5V relay 
+to 24V relay to power outlet)
+
+This is very much a work in progress and a chance for me to learn 
+about using the Arduino. Any questions, comments, or critiques are 
+more than welcome!
