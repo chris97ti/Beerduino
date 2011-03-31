@@ -25,12 +25,12 @@ this nears completion.)
 2 digital one-wire temperature sensors DS18B20 (pin 6)
 
 1 20x4 LCD screen:
-	Pin 2 – LCD pin 14
-	Pin 3 – LCD pin 13
-	Pin 4 – LCD pin 12
-	Pin 5 – LCD pin 11
-	Pin 12 – LCD pin 6 (EN)
-	Pin 13 – LCD pin 4 (RS)
+	Pin 2 - LCD pin 14
+	Pin 3 - LCD pin 13
+	Pin 4 - LCD pin 12
+	Pin 5 - LCD pin 11
+	Pin 12 - LCD pin 6 (EN)
+	Pin 13 - LCD pin 4 (RS)
 	
 Planned: Remove at least 2 LEDs for power controls (Mosfet to 5V relay 
 to 24V relay to power outlet)
