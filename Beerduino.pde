@@ -1,16 +1,16 @@
 /*
 Very early rough draft sketch for Beerduino
  
- Goal of this project is to regulate temperature in a
- refridgerator by controlling the compressor and a 
- separate heating element according to readings from
- temperature sensors. Unit will take commands over serial
- from a computer and will answer queries. The ultimate
- intent is to log this information onto a Rails site and
- make system fully available remotely via the web.
+Goal of this project is to regulate temperature in a
+refridgerator by controlling the compressor and a 
+separate heating element according to readings from
+temperature sensors. Unit will take commands over serial
+from a computer and will answer queries. The ultimate
+intent is to log this information onto a Rails site and
+make system fully available remotely via the web.
  
- Malcolm Morris-Pence 2011
- */
+Malcolm Morris-Pence 2011
+*/
 
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -18,7 +18,10 @@ Very early rough draft sketch for Beerduino
 
 // Target temperature:
 float targetTemp = 70.00;
-int readInterval = 2000;
+float tempDifferential = 1.5; // how many degrees +/- to stray from target temp before turning on
+int readInterval = 2000; // read every 2 seconds
+long applianceDelay = 120000; // how long between turning of a device and turning on again
+
 
 // Declaring some variables
 float currentAnalogTemp = 0.0;
@@ -27,17 +30,23 @@ float currentDigitalTemp2 = 0.0;
 unsigned long timeNow;
 unsigned long lastTempCheck;
 unsigned long lastLEDCheck;
-unsigned long lastTempRotation;
+
+int lastDisplayedTemp = 0; // which sensor's temp was last displayed
+unsigned long lastTempRotation; // time when the current displayed temp started to show
+int tempRotationInterval = 4; //interval to rotate temperatures
+unsigned long timeOfLastOff;
 
 boolean compressorState = false;
 boolean heaterState = false;
 
 
 // LED Setup
-int greenLED1 = 9;
-int greenLED2 = 10;
-int redLED1 = 8;
-int redLED2 = 7;
+int greenLED = 8;
+int redLED = 7;
+
+// Relay Setup
+int compressorRelay = 11;
+int heaterRelay = 10;
 
 // LCD Setup
 LiquidCrystal lcd(13, 12, 5, 4, 3, 2);
@@ -69,10 +78,12 @@ void setup(void) {
   Serial.begin(9600);
 
   // LED pins
-  pinMode(greenLED1, OUTPUT);
-  pinMode(greenLED2, OUTPUT);
-  pinMode(redLED1, OUTPUT);
-  pinMode(redLED2, OUTPUT);
+  pinMode(greenLED, OUTPUT);
+  pinMode(redLED, OUTPUT);
+  
+  // Relay pins
+  pinMode(compressorRelay, OUTPUT);
+  pinMode(heaterRelay, OUTPUT);
 
   // Initialize digital sensors
   sensors.begin();
@@ -101,7 +112,7 @@ void checkTemp() {
   timeNow = millis();
   if (timeNow >= lastTempCheck + readInterval) {
     currentAnalogTemp = analogTemp();
-    printAnalogTemp();
+    //printLCDTemp(currentAnalogTemp);
 
     sensors.requestTemperatures();
     currentDigitalTemp1 = digitalTemp(digitalThermometer1);
@@ -116,11 +127,30 @@ void checkTemp() {
   }
 }
 
-void rotateTemps(int time) {
+// Display temps on 3rd line, rotating at specified interval
+void showTemps(int interval) {
   timeNow = millis();
-  if (timeNow >= lastTempRotation + time * 1000) {
-    Serial.println("time is");
+  
+  if (timeNow >= lastTempRotation + interval * 1000) {
+    if (lastDisplayedTemp == 0) {
+      printDigitalTemp1();
+    }
+    else if (lastDisplayedTemp == 1) {
+      printDigitalTemp2();
+    }
+    else {
+      printAnalogTemp();
+    }
+    
+    if (lastDisplayedTemp <= 1) {
+      lastDisplayedTemp++;
+    }
+    else {
+      lastDisplayedTemp = 0;
+    }
+    
     lastTempRotation = timeNow;
+    
   }
 }
 
@@ -138,7 +168,7 @@ void checkLEDs() {
     }
 
     // Light up greens if hot
-    if (currentAnalogTemp > targetTemp + 1) {
+    if (currentAnalogTemp > targetTemp + tempDifferential) {
       if (compressorState == 0) {
         clearLCDRow(3);
         lcd.setCursor(0,3);
@@ -147,14 +177,11 @@ void checkLEDs() {
         compressorState = 1;
         heaterState = 0; // Just in case
       }
-      digitalWrite(greenLED1, HIGH);
-      if (currentAnalogTemp > targetTemp + 3) {
-        digitalWrite(greenLED2, HIGH);
-      }
+      digitalWrite(greenLED, HIGH);
     }
 
     // Light up reds if cold
-    if (currentAnalogTemp < targetTemp) {
+    if (currentAnalogTemp < targetTemp - tempDifferential) {
       if (heaterState == 0) {
         clearLCDRow(3);
         lcd.setCursor(0,3);
@@ -163,10 +190,7 @@ void checkLEDs() {
         heaterState = 1;
         compressorState = 0; // Just in case
       }
-      digitalWrite(redLED1, HIGH);
-      if (currentAnalogTemp < targetTemp - 2) {
-        digitalWrite(redLED2, HIGH);
-      }
+      digitalWrite(redLED, HIGH);
     }
 
     lastLEDCheck = timeNow;
@@ -179,7 +203,7 @@ void loop(void) {
 
   checkLEDs();
 
-  rotateTemps(5);
+  showTemps(tempRotationInterval);
 }
 
 
